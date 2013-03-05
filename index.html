@@ -1,0 +1,355 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+	<title>AIBS Connectivity Viewer</title>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="./leaflet.css" />
+
+	<!--[if lte IE 8]><link rel="stylesheet" href="./leaflet.ie.css" /><![endif]-->
+
+    <style type="text/css">
+
+    body {
+        padding: 0px;
+        margin: 0px;
+        height: 100%;
+    }
+
+    #map 
+    {
+        background-color: #fff;
+    }
+
+    #tileContainer
+    {
+        height: 80px;
+        width: 100%;
+        margin:0px;
+        padding: 0px;
+        background-color: #aaa;
+        border-top: 1px solid #666;
+        /*overflow: auto;*/
+
+        overflow-y:hidden;
+        overflow-x:auto;
+
+    }
+
+    #innerContainer
+    {
+        height:100%;
+        margin:0px;
+        padding: 0px;
+
+    }
+
+    .thumbnail
+    {
+        height: 80px;
+        margin-left: 3px;
+    }
+
+    
+
+    </style>
+</head>
+<body>
+
+    
+    <script src="http://code.jquery.com/jquery-1.9.1.min.js"></script>
+
+    <div id="tileContainer">
+      <div id="innerContainer">
+        </div>
+
+    </div>
+    <div id="map" style="width: 100%; height: 800px"></div>
+    
+    <script src="./leaflet.js"></script>
+    <script type="text/javascript" src="./connectivity_layer.js"></script>
+    <script>		
+
+
+
+    var seriesDataSet = [];
+    var tilepath = '';
+    var layer;
+    var imageToLoad;
+
+    var thumbbarheight = 80;
+
+    $("#map").height ( window.innerHeight - thumbbarheight);   
+    var map = new L.Map('map', { attributionControl: false });
+    map.setView(new L.LatLng(0,0), 0);
+
+
+    // /mobi/i.test(navigator.userAgent) && !location.hash && setTimeout(function () {
+    //   if (!pageYOffset) 
+    // }, 1000);
+    
+
+    window.scrollTo(0, 1);
+
+
+    window.onresize = function(event) {
+
+        $("#map").height ( window.innerHeight - thumbbarheight);   
+
+    }
+
+    var getAperioXML = function(folderName)
+    {
+
+      folderName = '/'
+
+      var statPath = basePath + folderName + 'stats.xml';
+      console.log(statPath);
+    
+        $.ajax({  
+           type: "GET",  
+           url: statPath,  
+           dataType: "xml",  
+           success: parseStatXml  
+       });
+    }
+
+
+    var basePath = './aperio';
+
+
+    var parseStatXml = function (xml) {
+
+        var       folderName = '/'
+
+
+        $imgxml = $(xml).find("image");
+        $("#innerContainer").width($imgxml.length * 90);
+
+        var i = 0;
+        var items = [];        
+
+        $imgxml.each(function() {
+
+          var rgb_opts = {
+              rmin:0,
+              rmax:1,
+              gmin:0,
+              gmax:0,
+              bmin:0,
+              bmax:0
+          }         
+          
+          var height = $(this).find('height').text();
+          var width = $(this).find('width').text();
+          var path = basePath + folderName + $(this).find('filename').text();
+
+          console.log(path);
+
+          var imageDict = {
+            rgb: rgb_opts,
+            imageURL: path,
+            index: i,
+            height: height, 
+            width: width,
+            otherData: $(this)
+          }
+          
+          seriesDataSet.push(imageDict);
+
+          items.push("<a href='#' onclick='loadFromAperioImageID("+ i +")'><img class='thumbnail' src='"+ path + "?0+0+120+120+-1+50'></img></a>");
+
+          i += 1;
+        });
+
+        $('<div>', {
+           'class': 'specimen-list',
+           html: items.join('')
+        }).appendTo('#innerContainer');
+  }
+
+
+    var loadFromAperioImageID = function(index)
+    {
+        imageToLoad = seriesDataSet[index];
+
+        console.log(imageToLoad);
+
+        var path = imageToLoad['imageURL'];
+        var width = imageToLoad['width'];
+        var height = imageToLoad['height'];
+    
+        var imageUrl = path;
+        imageSize = { width: width, height: height};
+
+        if (layer)
+        {
+          map.removeLayer(layer);
+        }
+
+        layer = new AperioLayer(imageUrl, imageSize, {rgb:imageToLoad['rgb']});
+        
+        map.addLayer(layer);
+
+    }
+
+
+
+    var getSpecimentJSON = function(specimen_id)
+    {
+      console.log(specimen_id);
+
+      var requestString = "http://connectivity.brain-map.org/api/v2/data/SectionDataSet/" + specimen_id + ".json?wrap=true&include=plane_of_section%2Ctreatments%2Cspecimen(donor(transgenic_mouse(transgenic_lines))%2Cinjections(structure%2Cage))%2Csection_images(associates)%2Cgenes%2Cequalization&order=sub_images.section_number%24desc";
+      
+      $.getJSON(requestString,
+
+
+            function(data) {
+
+                var items = [];
+                console.log(data['success'])
+                console.log(data['msg'][0]['section_images'].length)
+
+                $("#innerContainer").width(data['msg'][0]['section_images'].length * 160);
+
+                // console.log(data['total_rows'])
+
+                var r_min  = data['msg'][0]['equalization']['red_lower']
+                var r_max  = data['msg'][0]['equalization']['red_upper']
+
+                var g_min  = data['msg'][0]['equalization']['green_lower']
+                var g_max  = data['msg'][0]['equalization']['green_upper']
+
+                var b_min  = data['msg'][0]['equalization']['blue_lower']
+                var b_max  = data['msg'][0]['equalization']['blue_upper']   
+
+                var rgb_opts = {
+                    rmin:r_min,
+                    rmax:r_max,
+                    gmin:g_min,
+                    gmax:g_max,
+                    bmin:b_min,
+                    bmax:b_max
+                }         
+
+                for(var i=0; i < data['msg'][0]['section_images'].length; i++)
+                {
+                     var objectDict = data['msg'][0]['section_images'][i]['path'];
+                     var splitss =  objectDict.split('\/');
+                     var fixed = splitss.join('\\');
+
+                     imageDict = {
+                        rgb: rgb_opts,
+                        imageURL: objectDict,
+                        index: i
+                     }
+
+                    seriesDataSet.push(imageDict)
+                    
+                    items.push("<a href='#' onclick='loadFromSeriesID("+ i +")'><img class='thumbnail' src='http://connectivity.brain-map.org/tiles//"+ objectDict + "TileGroup0/0-0-0.jpg?range=" + r_min + "," + r_max + ',' + g_min + ',' + g_max + ',' + b_min + ',' + b_max + "'></img></a>");
+
+
+                  // "&range=" + r_min + "," + r_max + ',' + g_min + ',' + g_max + ',' + b_min + ',' + b_max + "'><img class='thumbnail' src='http://connectivity.brain-map.org/tiles//"+ objectDict + "TileGroup0/0-0-0.jpg?range=" + r_min + "," + r_max + ',' + g_min + ',' + g_max + ',' + b_min + ',' + b_max + "'></img></a>");
+                }
+
+
+
+            $('<div>', {
+               'class': 'specimen-list',
+               html: items.join('')
+            }).appendTo('#innerContainer');
+
+         });
+
+    }
+
+    var loadFromSeriesID = function(index)
+    {
+        imageToLoad = seriesDataSet[index];
+        var basePath = 'http://connectivity.brain-map.org/tiles/';
+        tilepath = basePath + imageToLoad['imageURL'];
+        var ImagePropertiesPath = basePath + imageToLoad['imageURL'] + "/ImageProperties.xml";
+
+        $.ajax({  
+           type: "GET",  
+           url: ImagePropertiesPath,  
+           dataType: "xml",  
+           success: parseXml  
+       });
+    }
+
+// http://connectivity.brain-map.org/tiles///external/connectivity/prod12/0500135981-0088/0500135981-0088.aff/TileGroup0/4-6-1.jpg?range=0,1133,0,1310,0,4095
+
+    function getParam ( sname )
+    {
+      var params = location.search.substr(location.search.indexOf("?")+1);
+      var sval = "";
+      params = params.split("&");
+        // split param and value into individual pieces
+        for (var i=0; i<params.length; i++)
+           {
+             temp = params[i].split("=");
+             if ( [temp[0]] == sname ) { sval = temp[1]; }
+           }
+      return sval;
+    }
+
+    var parseXml = function (xml) {
+
+       $imgxml = $(xml).find("IMAGE_PROPERTIES");
+
+       var height = $imgxml.attr("HEIGHT");
+       var width = $imgxml.attr("WIDTH");    
+
+
+
+       var imageUrl = tilepath,
+       imageSize = { width: width, height: height};
+
+       if (layer)
+       {
+            map.removeLayer(layer);
+       }
+
+        
+
+        layer = new ZoomifyLayer(imageUrl, imageSize, {rgb:imageToLoad['rgb']});
+        
+        map.addLayer(layer);
+
+			// var popup = L.popup();
+			// function onMapClick(e) {
+			//     popup
+			//         .setLatLng(e.latlng)
+			//         .setContent("You clicked the map at " + e.latlng.toString())
+			//         .openOn(map);
+			// }
+			// map.on('click', onMapClick);
+
+	}
+
+
+  getAperioXML();
+
+        // var param = getParam("series");
+
+        // console.log(param);
+
+        // if(param.length > 6)
+        // {
+        //     getSpecimentJSON(param);
+
+        // }
+        // else
+        // {
+        //     getSpecimentJSON('127084296');
+
+        // }
+
+
+
+
+       </script>
+   </body>
+   </html>
