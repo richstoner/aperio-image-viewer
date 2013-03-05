@@ -1,3 +1,1 @@
-## demo, please see richstoner.github.com/view/
-
-
+## demo, please see richstoner.github.com
